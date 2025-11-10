@@ -1,0 +1,81 @@
+"""
+    here = Path(__file__).resolve()
+    project_root = here.parents[1]
+
+    return {
+        "input": project_root / "data" / "inputs.sample.txt",
+        "output": project_root / "data" / "sample.json",
+        "config": project_root / "src" / "config" / "settings.example.json",
+    }
+
+@app.command()
+def run(
+    input_file: Path = typer.Option(
+        None,
+        "--input",
+        "-i",
+        help="Path to text file containing Instagram usernames (one per line).",
+    ),
+    output_file: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Path to JSON file where results will be written.",
+    ),
+    config_file: Path = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to JSON configuration file.",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose debug logging.",
+    ),
+) -> None:
+    """
+    Scrape one or more public Instagram profiles and export them as JSON.
+    """
+    setup_logging(verbose)
+    defaults = default_paths()
+
+    input_path = input_file or defaults["input"]
+    output_path = output_file or defaults["output"]
+    config_path = config_file or defaults["config"]
+
+    logging.info("Using input file: %s", input_path)
+    logging.info("Using output file: %s", output_path)
+    logging.info("Using config file: %s", config_path)
+
+    try:
+        config = load_config(config_path)
+        usernames = load_usernames(input_path)
+        logging.info("Loaded %d usernames from input file.", len(usernames))
+
+        scraper = create_scraper_from_config(config)
+        profiles: List[dict] = []
+
+        for username in usernames:
+            logging.info("Scraping profile: %s", username)
+            profile_data = scraper.fetch(username)
+            if profile_data is None:
+                logging.warning("No data returned for username '%s'. Skipping.", username)
+                continue
+            profiles.append(profile_data)
+
+        if not profiles:
+            logging.warning("No profiles were successfully scraped. Nothing to export.")
+            return
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        export_profiles_to_json(profiles, output_path)
+        logging.info("Successfully wrote %d profiles to %s", len(profiles), output_path)
+
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("Runner encountered an unrecoverable error: %s", exc)
+        raise typer.Exit(code=1) from exc
+
+if __name__ == "__main__":
+    app()
