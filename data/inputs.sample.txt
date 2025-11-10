@@ -1,0 +1,6 @@
+# Sample list of Instagram usernames to scrape (one per line).
+# Lines starting with '#' are ignored.
+
+instagram
+nasa
+natgeo
